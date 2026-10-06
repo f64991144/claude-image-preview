@@ -1,0 +1,9 @@
+This plugin is a fork of jarrodwatts/claude-image-view at commit
+b3c412bb6d167cafade79148e95f9114ee1aad7c:
+
+https://github.com/jarrodwatts/claude-image-view
+
+Original work Copyright (c) 2026 Jarrod Watts, licensed under the MIT License.
+See LICENSE. Changes in this fork: the plugin id is image-preview (so it does
+not clash with the upstream image-view), and thumbnails can be enlarged in a
+pane, with a fallback to macOS Preview when the pane cannot be shown.

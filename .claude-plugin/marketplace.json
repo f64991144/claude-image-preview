@@ -1,0 +1,19 @@
+{
+  "name": "claude-image-preview",
+  "owner": {
+    "name": "f64991144",
+    "url": "https://github.com/f64991144"
+  },
+  "plugins": [
+    {
+      "name": "image-preview",
+      "source": "./",
+      "description": "See the images you paste into Claude Code: thumbnails above the prompt, click to enlarge.",
+      "category": "productivity",
+      "tags": ["images", "paste", "preview", "thumbnails", "mod", "terminal"]
+    }
+  ],
+  "metadata": {
+    "description": "See the images you paste into Claude Code"
+  }
+}

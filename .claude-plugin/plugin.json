@@ -1,0 +1,14 @@
+{
+  "name": "image-preview",
+  "version": "0.2.2",
+  "description": "See the images you paste into Claude Code: thumbnails above the prompt instead of bare [Image #N] tags, and click a thumbnail to enlarge it.",
+  "author": {
+    "name": "f64991144",
+    "url": "https://github.com/f64991144"
+  },
+  "homepage": "https://github.com/f64991144/claude-image-preview",
+  "repository": "https://github.com/f64991144/claude-image-preview",
+  "license": "MIT",
+  "keywords": ["mods", "images", "paste", "preview", "thumbnails", "terminal"],
+  "types": "./types/index.d.ts"
+}
