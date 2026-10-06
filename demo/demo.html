@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>image-preview demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* One 1280×720 stage: a camera over a recreated terminal, captions under it. */
+  :root {
+    color-scheme: dark;
+    --page: #15131c;
+    --term: #1c1c1c;
+    --term-line: #2c2c2c;
+    --text: #d6d6d6;
+    --dim: #8b8b8b;
+    --faint: #868686;
+    --accent: #d97757;
+    --focus-bg: #e8e8e8;
+    --focus-fg: #1c1c1c;
+    --focus-key: #4b5bd6;
+    --caption: #f2f2f2;
+    --caption-sub: #a9a6b8;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    --sans: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--text); }
+  body { display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: var(--sans); }
+  ::selection { background: var(--accent); color: #fff; }
+
+  #stage { position: relative; width: 1280px; height: 720px; flex: none; transform-origin: center center; overflow: hidden; cursor: pointer;
+           background: radial-gradient(120% 90% at 50% 35%, #221d33 0%, var(--page) 70%); }
+  #view { position: absolute; left: 0; top: 0; width: 1280px; height: 590px; overflow: hidden; }
+  #cam { position: absolute; left: 0; top: 0; width: 1280px; height: 590px; transform-origin: 0 0; }
+
+  .win { position: absolute; left: 40px; top: 24px; width: 1200px; height: 540px; background: var(--term);
+         border-radius: 12px; overflow: hidden; box-shadow: 0 18px 40px rgba(0,0,0,.5); }
+  .titlebar { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #232323; border-bottom: 1px solid #2a2a2a; }
+  .light { width: 12px; height: 12px; border-radius: 50%; }
+  .titlebar .name { margin-left: 12px; font: 13px var(--mono); color: var(--dim); }
+  .body { position: absolute; left: 0; right: 0; top: 36px; bottom: 0; display: flex; }
+  .main { position: relative; flex: 1; min-width: 0; overflow: hidden; padding: 18px 24px 0; font: 15px/1.55 var(--mono); }
+  .transcript .row { white-space: pre; }
+  .dim { color: var(--dim); }
+  .acc { color: var(--accent); }
+
+  .bottom { position: absolute; left: 24px; right: 24px; bottom: 16px; }
+  .band { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 10px; }
+  .tile { border: 1px solid #555; border-radius: 8px; padding: 6px 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; transform-origin: 50% 100%; }
+  .tile svg { display: block; width: 196px; height: 110px; border-radius: 3px; }
+  .tile .label { font: 13px var(--mono); color: var(--dim); padding: 0 4px; border-radius: 2px; }
+  .tile .label.focus { background: var(--focus-bg); color: var(--focus-fg); }
+  .tile .label.focus b { color: var(--focus-key); }
+  .hint { font: 13px var(--mono); color: var(--faint); padding-bottom: 2px; }
+  .rule { border-top: 1px solid var(--term-line); }
+  .prompt { padding: 9px 0; font: 15px var(--mono); white-space: pre; min-height: 41px; }
+  .caret { display: inline-block; width: 9px; height: 18px; background: var(--text); vertical-align: -3px; }
+  .status { padding-top: 8px; font: 13px var(--mono); color: var(--dim); }
+
+  .pane { position: relative; flex: none; width: 0; overflow: hidden; border-left: 1px solid var(--term-line); background: #191919; }
+  .pane-inner { position: absolute; top: 0; right: 0; width: 470px; height: 100%; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .pane-title { font: 13px var(--mono); color: var(--dim); display: flex; justify-content: space-between; }
+  .pane svg { width: 434px; height: 244px; border-radius: 4px; }
+  .pane .meta, .pane .keys { font: 13px var(--mono); color: var(--dim); }
+
+  .key { position: absolute; right: 64px; top: 570px; font: 500 14px var(--mono); color: var(--text);
+         background: #3a3550; border: 1px solid #57507a; border-radius: 6px; padding: 5px 11px; }
+  .cursor { position: absolute; width: 22px; height: 30px; }
+  .ripple { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid var(--accent); }
+
+  .caption { position: absolute; left: 60px; right: 60px; top: 604px; text-align: center; }
+  .caption .t { font: 700 30px/1.3 var(--sans); color: var(--caption); letter-spacing: -.005em; text-wrap: balance; }
+  .caption .s { margin-top: 8px; font: 500 18px/1.45 var(--sans); color: var(--caption-sub); }
+  .caption code { font-family: var(--mono); font-size: .88em; color: var(--accent); }
+  .progress { position: absolute; left: 60px; right: 60px; bottom: 10px; height: 3px; background: #2a2638; border-radius: 2px; }
+  .progress i { display: block; height: 100%; width: 0; background: #6e6888; border-radius: 2px; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .ripple { display: none !important; } }
+</style>
+</head>
+<body>
+<div id="stage" title="Click to pause or resume">
+  <div id="view"><div id="cam">
+    <div class="win">
+      <div class="titlebar">
+        <span class="light" style="background:#ff5f57"></span><span class="light" style="background:#febc2e"></span><span class="light" style="background:#28c840"></span>
+        <span class="name">~/code/support — claude</span>
+      </div>
+      <div class="body">
+        <div class="main">
+          <div class="transcript" id="transcript"></div>
+          <div class="bottom">
+            <div class="band" id="band"></div>
+            <div class="rule"></div>
+            <div class="prompt" id="prompt"></div>
+            <div class="rule"></div>
+            <div class="status">Opus · ~/code/support</div>
+          </div>
+        </div>
+        <div class="pane" id="pane">
+          <div class="pane-inner">
+            <div class="pane-title"><span>Image #2</span><span>×</span></div>
+            <div id="paneImg"></div>
+            <div class="meta">#2  1600×900</div>
+            <div class="keys">o open in Preview · Esc close</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <svg class="cursor" id="cursor" viewBox="0 0 22 30" hidden><path d="M2 2 L2 24 L8 18.5 L12 27 L15.5 25.5 L11.6 17.2 L19 17.2 Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  <div class="ripple" id="ripple" hidden></div>
+  <div class="key" id="key" hidden></div>
+
+  <div class="caption"><div class="t" id="capT"></div><div class="s" id="capS"></div></div>
+  <div class="progress"><i id="bar"></i></div>
+</div>
+
+<script>
+// Stand-in screenshots: the wrong one (a spreadsheet) and the right one (an error dialog).
+const COLS = [8, 70, 140, 210, 268];
+const WRONG = `<svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="180" fill="#f4f6f8"/>
+  <rect width="320" height="22" fill="#1f7a46"/><text x="10" y="15" font-size="11" fill="#fff" font-family="sans-serif">Q3 sales.xlsx</text>
+  <g stroke="#cfd6dd" stroke-width="1">
+    ${Array.from({length: 8}, (_, i) => `<line x1="0" y1="${40 + i * 18}" x2="320" y2="${40 + i * 18}"/>`).join('')}
+    ${[62, 132, 202, 260].map(x => `<line x1="${x}" y1="22" x2="${x}" y2="180"/>`).join('')}
+  </g>
+  <rect x="0" y="22" width="320" height="18" fill="#e3e8ec"/>
+  ${['Region', 'Jul', 'Aug', 'Sep', 'Total'].map((h, i) => `<text x="${COLS[i]}" y="35" font-size="10" fill="#333" font-family="sans-serif">${h}</text>`).join('')}
+  ${[['North', '312', '298', '341', '951'], ['Central', '204', '219', '236', '659'], ['South', '188', '176', '205', '569'], ['East', '96', '102', '99', '297']]
+    .map((r, j) => r.map((c, i) => `<text x="${COLS[i]}" y="${53 + j * 18}" font-size="10" fill="#444" font-family="sans-serif">${c}</text>`).join('')).join('')}
+</svg>`;
+const RIGHT = `<svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="180" fill="#dfe4ea"/>
+  <rect width="320" height="20" fill="#c9d0d8"/>
+  <rect x="44" y="34" width="232" height="118" rx="8" fill="#fff" stroke="#b8c0c8"/>
+  <circle cx="72" cy="66" r="13" fill="#d64545"/><path d="M66 60 L78 72 M78 60 L66 72" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+  <text x="94" y="62" font-size="12" font-weight="700" fill="#222" font-family="sans-serif">Can't reach the server</text>
+  <text x="94" y="78" font-size="10" fill="#555" font-family="sans-serif">Connection timed out (504)</text>
+  <text x="62" y="104" font-size="9.5" fill="#666" font-family="sans-serif">Check your network settings and try again.</text>
+  <rect x="198" y="120" width="62" height="22" rx="4" fill="#3a6fd8"/><text x="214" y="135" font-size="10" fill="#fff" font-family="sans-serif">Retry</text>
+  <rect x="128" y="120" width="62" height="22" rx="4" fill="#fff" stroke="#b8c0c8"/><text x="141" y="135" font-size="10" fill="#333" font-family="sans-serif">Cancel</text>
+</svg>`;
+
+const DURATION = 24;
+const Q = 'why does this dialog show an error? ';
+const TYPE_CPS = 24;
+const $ = id => document.getElementById(id);
+const clamp01 = x => Math.min(Math.max(x, 0), 1);
+const easeOut = x => 1 - Math.pow(1 - clamp01(x), 3);
+const easeInOut = x => { x = clamp01(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const between = (t, a, b) => t >= a && t < b;
+const typed = (t, start) => Q.slice(0, Math.max(0, Math.floor((t - start) * TYPE_CPS)));
+
+// Camera: wide, then close on the prompt for the paste, then wide again for the zoom pane.
+const WIDE = [640, 295, 1], CLOSE = [412, 412, 1.72];
+const SHOTS = [[0, WIDE], [0.6, WIDE], [1.5, CLOSE], [14.4, CLOSE], [15.3, WIDE], [DURATION, WIDE]];
+function camera(t) {
+  for (let i = 0; i < SHOTS.length - 1; i++) {
+    const [a, from] = SHOTS[i], [b, to] = SHOTS[i + 1];
+    if (t <= b) {
+      const p = easeInOut((t - a) / (b - a));
+      return from.map((v, k) => v + (to[k] - v) * p);
+    }
+  }
+  return WIDE;
+}
+
+function render(t) {
+  // phases
+  const before = t < 4.2;
+  const pasted1 = between(t, 7.0, 11.8);
+  const pasted2 = between(t, 12.6, 21.3);
+  const sent = t >= 21.3;
+  const paneOpen = between(t, 16.3, 20.6);
+  const focusLabel = between(t, 16.3, 20.6); // a click gives the thumbnail row the focus
+
+  // camera
+  const [cx, cy, s] = camera(t);
+  $('cam').style.transform = `translate(${640 - cx * s}px, ${295 - cy * s}px) scale(${s})`;
+
+  // transcript
+  const rows = [
+    '<div class="row"><span class="acc">❯</span> the login page hangs after I sign in</div>',
+    '<div class="row dim">  ⎿  The session check waits on a request that never returns. Added a timeout in auth.ts.</div>',
+    '<div class="row"> </div>',
+  ];
+  if (sent) {
+    rows.push(`<div class="row"><span class="acc">❯</span> ${Q}[Image #2]</div>`);
+    if (t >= 21.9) rows.push('<div class="row dim">  ⎿  Reading the image…</div>');
+  }
+  $('transcript').innerHTML = rows.join('');
+
+  // prompt, typed
+  let text = '';
+  if (before) text = typed(t, 0.9) + (t >= 2.9 ? '[Image #1]' : '');
+  else if (!sent) {
+    text = t >= 5.2 ? typed(t, 5.2) : '';
+    if (pasted1) text += '[Image #1]';
+    if (pasted2) text += '[Image #2]';
+  }
+  $('prompt').innerHTML = `<span class="acc">❯</span> ${text}<span class="caret"></span>`;
+
+  // band above the prompt; a tile settles in over 180 ms
+  const tile = (svg, n, focus, born) => {
+    const k = easeOut((t - born) / 0.18);
+    return `<div class="tile" style="transform: scale(${0.92 + 0.08 * k})">${svg}<span class="label${focus ? ' focus' : ''}">${focus ? `<b>${n}</b>: ` : ''}#${n}</span></div>`;
+  };
+  let band = '';
+  if (pasted1) band = tile(WRONG, 1, false, 7.0);
+  if (pasted2) band = tile(RIGHT, 2, focusLabel, 12.6);
+  if (band) band += '<span class="hint">zoom: click #N, or ctrl+x tab then 1-9</span>';
+  $('band').innerHTML = band;
+
+  // zoom pane docked on the right
+  const open = paneOpen ? easeOut((t - 16.3) / 0.25) : 0;
+  $('pane').style.width = `${Math.round(470 * open)}px`;
+  if (!$('paneImg').innerHTML) $('paneImg').innerHTML = RIGHT;
+
+  // keys
+  const keys = [[2.9, 3.7, '⌘V'], [7.0, 7.8, '⌘V'], [11.8, 12.5, '⌫ Backspace'], [12.6, 13.4, '⌘V'], [20.6, 21.2, 'Esc'], [21.3, 22.0, '⏎ Enter']];
+  const k = keys.find(([a, b]) => between(t, a, b));
+  $('key').toggleAttribute('hidden', !k);
+  if (k) $('key').textContent = k[2];
+
+  // pointer travels to #2 and clicks
+  const target = labelCenter() ?? [175, 455];
+  const showCur = between(t, 15.0, 17.6);
+  const cur = $('cursor');
+  cur.toggleAttribute('hidden', !showCur);
+  if (showCur) {
+    const p = easeOut((t - 15.0) / 1.1);
+    const from = [1050, 500], to = [target[0] - 4, target[1] - 2];
+    cur.style.left = `${from[0] + (to[0] - from[0]) * p}px`;
+    cur.style.top = `${from[1] + (to[1] - from[1]) * p}px`;
+  }
+  const showRip = between(t, 16.15, 16.65);
+  const rip = $('ripple');
+  rip.toggleAttribute('hidden', !showRip);
+  if (showRip) {
+    const r = (t - 16.15) / 0.5;
+    rip.style.left = `${target[0]}px`; rip.style.top = `${target[1]}px`;
+    rip.style.transform = `scale(${0.6 + r * 0.8})`; rip.style.opacity = String(1 - r);
+  }
+
+  // captions
+  const caps = [
+    [0, 4.2, 'Paste an image and the prompt only says <code>[Image #1]</code>', 'Did you paste the right one? You find out after you send.'],
+    [4.2, 7.0, 'With image-preview', ''],
+    [7.0, 9.4, 'The picture shows up above the prompt as you paste', ''],
+    [9.4, 11.8, 'Wrong picture. That one is a spreadsheet.', ''],
+    [11.8, 14.6, 'Delete the tag and paste again', ''],
+    [14.6, 20.6, 'Click <code>#2</code> to see it large', 'Fullscreen layout: click it. Default layout: <code>ctrl+x tab</code>, then <code>2</code>.'],
+    [20.6, DURATION, 'Send when it’s right. The thumbnails clear.', ''],
+  ];
+  const c = caps.find(([a, b]) => between(t, a, b));
+  $('capT').innerHTML = c ? c[2] : '';
+  $('capS').innerHTML = c ? c[3] : '';
+  $('bar').style.width = `${(t / DURATION) * 100}%`;
+}
+
+// where the #N label sits, in stage pixels (after the camera)
+function labelCenter() {
+  const label = document.querySelector('#band .label');
+  if (!label) return null;
+  const stage = $('stage').getBoundingClientRect(), r = label.getBoundingClientRect();
+  const scale = stage.width / 1280;
+  return [(r.left + r.width / 2 - stage.left) / scale, (r.top + r.height / 2 - stage.top) / scale];
+}
+
+function fit() {
+  const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+  $('stage').style.transform = `scale(${s})`;
+}
+window.addEventListener('resize', fit);
+fit();
+window.renderAt = render; // the recorder steps time through this
+
+const fixed = new URLSearchParams(location.search).get('t');
+if (fixed !== null) {
+  render(Number(fixed));
+  document.fonts.ready.then(() => render(Number(fixed)));
+} else {
+  let start = performance.now(), pausedAt = null;
+  const tick = now => {
+    if (pausedAt === null) render(((now - start) / 1000) % DURATION);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  const toggle = () => {
+    if (pausedAt === null) pausedAt = performance.now();
+    else { start += performance.now() - pausedAt; pausedAt = null; }
+  };
+  $('stage').addEventListener('click', toggle);
+  window.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); toggle(); } });
+}
+</script>
+</body>
+</html>

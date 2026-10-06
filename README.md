@@ -4,15 +4,9 @@ English | [繁體中文](#繁體中文)
 
 A Claude Code mod that shows the images you paste: thumbnails above the prompt instead of bare `[Image #1]` tags, so you can check you pasted the right picture before you send. Click a thumbnail's `#N` label to enlarge it.
 
-```
-╭────────────────────────╮
-│                        │
-│      (screenshot)      │
-│                        │
-│           #1           │   zoom: click #N, or ctrl+x tab then 1-9
-╰────────────────────────╯
-❯ why does this dialog show an error? [Image #1]
-```
+![image-preview: paste, spot the wrong picture, paste again, click to enlarge](demo/demo.gif)
+
+The demo is a recreated terminal, not a screen recording. Source: [demo/demo.html](demo/demo.html), recorded with [demo/record.py](demo/record.py) ([MP4](demo/demo.mp4)).
 
 ## Install
 
@@ -82,7 +76,7 @@ claude plugin test .
 
 ## 繁體中文
 
-讓你在 Claude Code 貼上的圖片看得到的 mod：輸入框上方顯示縮圖，取代只有 `[Image #1]` 的標籤，送出前就能確認貼對圖。點縮圖下方的 `#N` 可以放大。
+讓你在 Claude Code 貼上的圖片看得到的 mod：輸入框上方顯示縮圖，取代只有 `[Image #1]` 的標籤，送出前就能確認貼對圖。點縮圖下方的 `#N` 可以放大。示範影片見上方（重建的終端機畫面，不是實機錄影）。
 
 ### 安裝
 
