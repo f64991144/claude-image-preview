@@ -2,6 +2,8 @@
 
 English | [繁體中文](#繁體中文)
 
+**Paste a screenshot, see it before you send.**
+
 A Claude Code mod that shows the images you paste: thumbnails above the prompt instead of bare `[Image #1]` tags, so you can check you pasted the right picture before you send. Click a thumbnail's `#N` label to enlarge it.
 
 ![image-preview: paste, spot the wrong picture, paste again, click to enlarge](demo/demo.gif)
