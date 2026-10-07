@@ -24,7 +24,7 @@ Paste an image into the prompt and its thumbnail appears above the input.
 
 ## Use
 
-- **Any format.** PNG, JPEG, GIF and WebP pastes all get a thumbnail. Non-PNG pastes are converted once with macOS's built-in `sips` (or ImageMagick on Linux); a paste nothing can convert shows "no preview", and its `#N` opens the original instead.
+- **Any format.** PNG, JPEG, GIF and WebP pastes all get a thumbnail. Non-PNG pastes are converted once with macOS's built-in `sips` (or ImageMagick on Linux); other formats, or a paste nothing can convert, show "no preview", and their `#N` opens the original instead.
 - **Check before sending.** Each pasted image shows as a tile labelled with its tag number. Wrong picture? Delete the `[Image #N]` tag with Backspace and paste again; the tile updates.
 - **Enlarge.** Click the `#N` under a thumbnail and the picture opens large in a pane. Inside the pane, `o` opens the original in macOS Preview and `x` or Esc closes it.
   - Clicking needs the fullscreen layout: run `/tui fullscreen` (switch back with `/tui default`). In the default layout, press `ctrl+x tab` to focus the thumbnail row, then press the number.
@@ -55,7 +55,7 @@ Claude Code saves each pasted image as `<tmp>/<project>/<session>/images/<n>.<ex
 
 The `Image` element draws PNG only, so a paste in any other format is converted once to `<tmp>/<project>/<session>/image-preview/<n>.png`, next to Claude Code's own cache, with `sips` (macOS) or ImageMagick's `magick`/`convert` (Linux). That folder is the only thing the mod writes, and it goes away with the session's temp files.
 
-It makes no network requests. It runs `id -u` once to find the default temp folder (when `CLAUDE_CODE_TMPDIR` is not set), the converter above once per non-PNG paste, and `open <file>` only when you ask for macOS Preview. Run `claude plugin validate .` on the repo to see every event it hooks and every call it makes.
+It makes no network requests. It runs `id -u` once to find the default temp folder (when `CLAUDE_CODE_TMPDIR` is not set), the converter above once per JPEG/GIF/WebP paste (cut off after 10 seconds), and `open <file>` only when you ask for macOS Preview. Run `claude plugin validate .` on the repo to see every event it hooks and every call it makes.
 
 ## Troubleshooting
 
@@ -96,7 +96,7 @@ claude plugin test .
 
 ### 使用
 
-- **各種格式都支援**：PNG、JPEG、GIF、WebP 貼上都有縮圖。非 PNG 的圖會用 macOS 內建的 `sips`（Linux 用 ImageMagick）轉一次成 PNG；轉不了的格式會顯示「no preview」，但 `#N` 仍可直接開原圖。
+- **各種格式都支援**：PNG、JPEG、GIF、WebP 貼上都有縮圖。非 PNG 的圖會用 macOS 內建的 `sips`（Linux 用 ImageMagick）轉一次成 PNG；其他格式或轉不了的圖會顯示「no preview」，但 `#N` 仍可直接開原圖。
 - **送出前確認**：每張貼上的圖都會出現一格縮圖，標著對應的編號。貼錯了就用 Backspace 刪掉 `[Image #N]` 再重貼，縮圖會跟著換。
 - **放大**：點縮圖下方的 `#N`，會開一個面板顯示大圖。面板裡按 `o` 用 macOS「預覽程式」開原圖，按 `x` 或 Esc 關閉。
   - 用滑鼠點需要全螢幕模式：輸入 `/tui fullscreen`（改回來用 `/tui default`）。一般模式下，先按 `ctrl+x tab` 讓縮圖列取得焦點，再按數字。

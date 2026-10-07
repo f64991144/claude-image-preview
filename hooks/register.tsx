@@ -72,18 +72,25 @@ function converters(src: string, dst: string): string[][] {
   ]
 }
 
+// Only these are handed to a converter: ImageMagick picks its decoder from the file's
+// content, and formats such as SVG, PDF or MVG run delegates, so anything else stays
+// "no preview". A converter that hangs must not stall the poll, hence the timeout.
+const CONVERTIBLE = /\.(jpe?g|gif|webp)$/i
+const CONVERT_TIMEOUT_MS = 10_000
+
 // The Image element draws PNG only, so any other paste is converted once to
 // <session>/image-preview/<n>.png. sips exits 0 even when it can't read the file, and a
 // missing converter rejects, so the copy's existence is what decides.
 async function toPng($: EngineInterface, where: Dirs, n: number, path: string): Promise<string | null> {
-  if (path.endsWith('.png')) return path
+  if (/\.png$/i.test(path)) return path
+  if (!CONVERTIBLE.test(path)) return null
   const known = converted.get(path)
   if (known !== undefined) return known
   const out = `${where.converted}/${n}.png`
   if (!(await $.fs.exists(out))) {
-    if (!(await $.fs.exists(where.converted))) await $.process.run(['mkdir', '-p', where.converted]).catch(() => undefined)
+    if (!(await $.fs.exists(where.converted))) await $.process.run(['mkdir', '-p', where.converted], { timeoutMs: CONVERT_TIMEOUT_MS }).catch(() => undefined)
     for (const argv of converters(path, out)) {
-      const ran = await $.process.run(argv).catch(() => undefined)
+      const ran = await $.process.run(argv, { timeoutMs: CONVERT_TIMEOUT_MS }).catch(() => undefined)
       if (ran?.exitCode === 0 && (await $.fs.exists(out))) break
     }
   }

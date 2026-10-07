@@ -186,8 +186,10 @@ test('a JPEG paste is converted to a PNG for the tile and opens in Preview as it
   on('fs.list', listing(dir, ['1.jpg']))
   on('fs.exists', ($, e) => ({ value: e.path === dir || (hasCopy && e.path === `${copies}/1.png`) }))
   on('fs.read', ($, e) => (e.path === `${copies}/1.png` ? { value: { base64: pngHead(800, 400) } } : { deny: 'not a file' }))
+  const timeouts: (number | undefined)[] = []
   on('process.run', ($, e) => {
     ran.push([...e.argv])
+    timeouts.push(e.init?.timeoutMs)
     if (e.argv[0] === 'sips') hasCopy = true
     return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -201,6 +203,8 @@ test('a JPEG paste is converted to a PNG for the tile and opens in Preview as it
     ['mkdir', '-p', copies],
     ['sips', '-s', 'format', 'png', `${dir}/1.jpg`, '--out', `${copies}/1.png`],
   ])
+  // A converter that hangs is cut off instead of stalling the poll.
+  expect(timeouts).toEqual([10_000, 10_000])
 
   const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const image = await band.find({ type: 'Image' })
@@ -215,7 +219,7 @@ test('a JPEG paste is converted to a PNG for the tile and opens in Preview as it
   expect(ran.length).toBe(3)
 })
 
-test('a paste no converter can read keeps its label, and the label opens it in Preview', async ($, on) => {
+test('a WebP no converter can read keeps its label, and the label opens it in Preview', async ($, on) => {
   const clock = mock.clock(on)
   const dir = '/tmp/claude-501/-work/sess-1/images'
   const draft = 'see [Image #1]'
@@ -224,7 +228,7 @@ test('a paste no converter can read keeps its label, and the label opens it in P
   on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
   on('env.get', () => ({ value: '/tmp/claude-501' }))
   on('session.id', () => ({ value: 'sess-1' }))
-  on('fs.list', listing(dir, ['1.heic']))
+  on('fs.list', listing(dir, ['1.webp']))
   on('fs.exists', ($, e) => ({ value: e.path === dir }))
   on('process.run', ($, e) => {
     ran.push([...e.argv])
@@ -243,10 +247,35 @@ test('a paste no converter can read keeps its label, and the label opens it in P
   expect(await band.find({ type: 'Image' })).toBeUndefined()
   expect(await band.find({ type: 'Text', text: 'no preview' })).toBeDefined()
   await band.press({ key: 'zoom-1' })
-  expect(ran.at(-1)).toEqual(['open', `${dir}/1.heic`])
+  expect(ran.at(-1)).toEqual(['open', `${dir}/1.webp`])
   await band.unmount()
 
   // Not retried on the next poll.
   await clock.advance(200)
   expect(ran.length).toBe(5)
+})
+
+test('formats outside the list are never handed to a converter', async ($, on) => {
+  const clock = mock.clock(on)
+  const dir = '/tmp/claude-501/-work/sess-1/images'
+  const draft = 'see [Image #1]'
+  const ran: string[][] = []
+  on('session.start', () => ({ cwd: '/work' }))
+  on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
+  on('env.get', () => ({ value: '/tmp/claude-501' }))
+  on('session.id', () => ({ value: 'sess-1' }))
+  on('fs.list', listing(dir, ['1.svg']))
+  on('fs.exists', ($, e) => ({ value: e.path === dir }))
+  on('process.run', ($, e) => {
+    ran.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
+
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  await clock.advance(200)
+  expect(ran).toEqual([])
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await band.find({ type: 'Text', text: 'no preview' })).toBeDefined()
+  await band.unmount()
 })
