@@ -11,6 +11,17 @@ function pngHead(width: number, height: number): string {
   return btoa(String.fromCharCode(...bytes))
 }
 
+const ENTRY = { size: 0, mtimeMs: 0, isLink: false } as const
+/** A folder listing: the temp root's project folders, and the session's images folder's files. */
+function listing(images: string, files: string[], projects = ['-work']) {
+  return (_: unknown, e: { path: string }) => ({
+    value:
+      e.path === images
+        ? files.map(name => ({ name, kind: 'file' as const, ...ENTRY }))
+        : projects.map(name => ({ name, kind: 'dir' as const, ...ENTRY })),
+  })
+}
+
 test('image numbers come from the draft, deduplicated, in order', () => {
   expect(imageNumbers('look [Image #2] and [Image #1] again [Image #2]')).toEqual([2, 1])
   expect(imageNumbers('[Image 1] [image #3] #4')).toEqual([])
@@ -60,16 +71,9 @@ test('a pasted image shows without another keystroke and clears when the draft d
   on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
   on('env.get', () => ({ value: '/tmp/claude-501' }))
   on('session.id', () => ({ value: 'sess-1' }))
-  // Another project's folder and a stray file sit beside the one holding this session.
-  const entry = { size: 0, mtimeMs: 0, isLink: false }
-  on('fs.list', () => ({
-    value: [
-      { name: '-other', kind: 'dir', ...entry },
-      { name: 'notes.txt', kind: 'file', ...entry },
-      { name: '-work', kind: 'dir', ...entry },
-    ],
-  }))
-  on('fs.exists', ($, e) => ({ value: e.path === dir || e.path === `${dir}/1.png` }))
+  // Another project's folder sits beside the one holding this session; only #1 is cached yet.
+  on('fs.list', listing(dir, ['1.png'], ['-other', '-work']))
+  on('fs.exists', ($, e) => ({ value: e.path === dir }))
   on('fs.read', () => ({ value: { base64: pngHead(800, 400) } }))
   on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
 
@@ -101,8 +105,8 @@ test('pressing a thumbnail enlarges it in a pane, which closes when its tag leav
   on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
   on('env.get', () => ({ value: '/tmp/claude-501' }))
   on('session.id', () => ({ value: 'sess-1' }))
-  on('fs.list', () => ({ value: [{ name: '-work', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] }))
-  on('fs.exists', ($, e) => ({ value: e.path === dir || e.path === `${dir}/1.png` }))
+  on('fs.list', listing(dir, ['1.png']))
+  on('fs.exists', ($, e) => ({ value: e.path === dir }))
   on('fs.read', () => ({ value: { base64: pngHead(800, 400) } }))
   on('ui.open', ($, e) => {
     opened.push(e.id)
@@ -149,8 +153,8 @@ test('a pane that cannot be seated falls back to opening the picture in Preview'
   on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
   on('env.get', () => ({ value: '/tmp/claude-501' }))
   on('session.id', () => ({ value: 'sess-1' }))
-  on('fs.list', () => ({ value: [{ name: '-work', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] }))
-  on('fs.exists', ($, e) => ({ value: e.path === dir || e.path === `${dir}/1.png` }))
+  on('fs.list', listing(dir, ['1.png']))
+  on('fs.exists', ($, e) => ({ value: e.path === dir }))
   on('fs.read', () => ({ value: { base64: pngHead(800, 400) } }))
   on('ui.open', () => ({ value: { isPlaced: false, reason: 'unasked below 144 columns' } }))
   on('ui.close', () => ({ value: undefined }))
@@ -166,4 +170,83 @@ test('a pane that cannot be seated falls back to opening the picture in Preview'
   await band.press({ key: 'zoom-1' })
   expect(ran).toContainEqual(['open', `${dir}/1.png`])
   await band.unmount()
+})
+
+test('a JPEG paste is converted to a PNG for the tile and opens in Preview as itself', async ($, on) => {
+  const clock = mock.clock(on)
+  const dir = '/tmp/claude-501/-work/sess-1/images'
+  const copies = '/tmp/claude-501/-work/sess-1/image-preview'
+  const draft = 'see [Image #1]'
+  const ran: string[][] = []
+  let hasCopy = false
+  on('session.start', () => ({ cwd: '/work' }))
+  on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
+  on('env.get', () => ({ value: '/tmp/claude-501' }))
+  on('session.id', () => ({ value: 'sess-1' }))
+  on('fs.list', listing(dir, ['1.jpg']))
+  on('fs.exists', ($, e) => ({ value: e.path === dir || (hasCopy && e.path === `${copies}/1.png`) }))
+  on('fs.read', ($, e) => (e.path === `${copies}/1.png` ? { value: { base64: pngHead(800, 400) } } : { deny: 'not a file' }))
+  on('process.run', ($, e) => {
+    ran.push([...e.argv])
+    if (e.argv[0] === 'sips') hasCopy = true
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'unasked below 144 columns' } }))
+  on('ui.close', () => ({ value: undefined }))
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
+
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  await clock.advance(200)
+  expect(ran).toEqual([
+    ['mkdir', '-p', copies],
+    ['sips', '-s', 'format', 'png', `${dir}/1.jpg`, '--out', `${copies}/1.png`],
+  ])
+
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const image = await band.find({ type: 'Image' })
+  expect(image?.props).toMatchObject({ source: { file: `${copies}/1.png`, format: 'png' }, columns: 24, rows: 6 })
+  // Preview gets the original, not the copy.
+  await band.press({ key: 'zoom-1' })
+  expect(ran.at(-1)).toEqual(['open', `${dir}/1.jpg`])
+  await band.unmount()
+
+  // The copy is converted once: a later redraw of the same draft runs nothing more.
+  await clock.advance(200)
+  expect(ran.length).toBe(3)
+})
+
+test('a paste no converter can read keeps its label, and the label opens it in Preview', async ($, on) => {
+  const clock = mock.clock(on)
+  const dir = '/tmp/claude-501/-work/sess-1/images'
+  const draft = 'see [Image #1]'
+  const ran: string[][] = []
+  on('session.start', () => ({ cwd: '/work' }))
+  on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
+  on('env.get', () => ({ value: '/tmp/claude-501' }))
+  on('session.id', () => ({ value: 'sess-1' }))
+  on('fs.list', listing(dir, ['1.heic']))
+  on('fs.exists', ($, e) => ({ value: e.path === dir }))
+  on('process.run', ($, e) => {
+    ran.push([...e.argv])
+    // sips reads nothing and still exits 0; ImageMagick is not installed.
+    if (e.argv[0] === 'sips') return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    if (e.argv[0] === 'open') return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    return { deny: `${e.argv[0]}: command not found` }
+  })
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
+
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  await clock.advance(200)
+  expect(ran.map(argv => argv[0])).toEqual(['mkdir', 'sips', 'magick', 'convert'])
+
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await band.find({ type: 'Image' })).toBeUndefined()
+  expect(await band.find({ type: 'Text', text: 'no preview' })).toBeDefined()
+  await band.press({ key: 'zoom-1' })
+  expect(ran.at(-1)).toEqual(['open', `${dir}/1.heic`])
+  await band.unmount()
+
+  // Not retried on the next poll.
+  await clock.advance(200)
+  expect(ran.length).toBe(5)
 })

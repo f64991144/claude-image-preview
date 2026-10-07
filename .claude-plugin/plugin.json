@@ -1,6 +1,6 @@
 {
   "name": "image-preview",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "See the images you paste into Claude Code: thumbnails above the prompt instead of bare [Image #N] tags, and click a thumbnail to enlarge it.",
   "author": {
     "name": "f64991144",
